@@ -1,0 +1,238 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+ ---
+title: "HW5 - Make Data Move"
+author: ""
+date: "05/10/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#  Explore the recent global developments with R
+Today, you will load a filtered gapminder dataset -  with a subset of data on global development from 1952 - 2007 in increments of 5 years - to capture the period between the Second World War and the Global Financial Crisis. 
+
+**Your task: Explore the data and visualise it in both static and animated ways, providing answers and solutions to 7 questions/tasks below.**
+
+## Get the necessary packages
+First, start with installing the relevant packages 'tidyverse', 'gganimate', and 'gapminder'.
+
+```{r libraries, echo = FALSE}
+# I load pacman to use p_load()
+library(pacman)
+p_load(tidyverse,gganimate,gapminder,cowplot, scales)
+
+```
+
+## Look at the data
+First, see which specific years are actually represented in the dataset and what variables are being recorded for each country. Note that when you run the cell below, Rmarkdown will give you two results - one for each line - that you can flip between.
+```{r}
+
+# Inspect data
+unique(gapminder$year)
+head(gapminder)
+
+# I load the data in as a df to make it easier to inspect
+gapminder <- as.data.frame(gapminder)
+
+```
+
+The dataset contains information on each country in the sampled year, its continent, life expectancy, population, and GDP per capita.
+
+Let's plot all the countries in 1952.
+```{r 1957}
+# set theme to white background for better visibility
+theme_set(theme_bw())  
+
+
+### make ggplot object
+y1952 <- ggplot(subset(gapminder, year == 1952), aes(gdpPercap, lifeExp, size = pop)) +
+  geom_point(color = "red") +
+  labs(title = "Population and GDP in 1952", x = "GDP", y = "Life Expectancy") + scale_x_log10()
+
+# plot it
+y1952
+
+```
+
+We see an interesting spread with an outlier to the right. Answer the following questions, please:
+
+## Q1. Why does it make sense to have a log10 scale on x axis?
+
+The difference in GDP per capitan from the richest country (the outliere) in 1952 to the rest of the countries is so huge, that the differences between GDP in the rest of the countries will get 'drowned' completely. This becomes apparent in the plot in the in the following chunk.
+Over time, the change in GDP per capitan will increase in a tremendous way. The log10 scale will facilitate the visibility this spread.
+
+```{r}
+### make ggplot object without log transforming the x-axis
+y1952_minuslog <- ggplot(subset(gapminder, year == 1952), aes(gdpPercap, lifeExp, size = pop)) +
+  geom_point(color = "red") +
+  labs(title = "Population and GDP in 1952", x = "GDP", y = "Life Expectancy")
+
+# plot it
+y1952_minuslog
+
+
+
+```
+
+
+## Q2. What country is the richest in 1952 (far right on x axis)? 
+```{r}
+# I use pipes, filter and subset to isolate the richest country
+gapminder %>% filter(year == 1952) %>% subset(gdpPercap == max(gdpPercap))
+
+```
+The richest Country is Kuwait
+
+You can generate a similar plot for 2007 and compare the differences
+```{r 2007}
+
+y2007 <- ggplot(subset(gapminder, year == 2007), aes(gdpPercap, lifeExp, size = pop, color = "blue")) +
+  geom_point(color = "blue") +
+  scale_x_log10() +
+  labs(title = "Population and GDP in 2007", x = "GDP", y = "Life Expectancy")
+
+# plot them next to each other
+cowplot::plot_grid(y1952, y2007, labels = "AUTO")
+
+```
+
+The bubbles are a bit hard to read, the comparison would be easier with a bit more visual differentiation.
+
+
+## Q3. Can you differentiate the continents by color and fix the axis labels?
+```{r}
+
+# I color by continent 
+y1952_2007 <- ggplot(subset(gapminder, year %in% c(1952, 2007)), aes(gdpPercap, lifeExp, size = pop, color = continent)) +
+  geom_point() +
+  scale_x_log10() +
+  labs(title = "Population and GDP in 2007", x = "GDP (on a logarithmic scale)", y = "Life Expectancy") +
+  facet_wrap(~ year)
+
+y1952_2007
+
+```
+
+
+## Q4. What are the five richest countries in the world in 2007?
+```{r}
+
+gapminder %>% subset(year == 2007) %>% arrange(desc(gdpPercap)) %>% head(5) %>% select(country, gdpPercap)
+
+```
+
+Norway, Kuwait, Singapore, US, and Ireland
+
+
+
+##  Make it move!
+
+The comparison would be easier if we had the two graphs together, animated. We have a lovely tool in R to do this: the `gganimate` package. And there are two ways of animating the gapminder ggplot.
+
+### Option 1: Animate using transition_states() 
+
+The first step is to create the object-to-be-animated
+```{r anim1 start}
+
+anim <- ggplot(gapminder, aes(gdpPercap, lifeExp, size = pop)) +
+  geom_point() +
+  scale_x_log10()
+
+anim # plot
+
+
+```
+
+This plot collates all the points across time. The next step is to split it into years and animate it. This may take some time, depending on the processing power of your computer (and other things you are asking it to do). Beware that the animation might appear in the 'Viewer' pane, not in this rmd preview. You need to knit the document to get the viz inside an html file.
+
+```{r anim1}
+anim + transition_states(year, 
+                      transition_length = 1,
+                      state_length = 1)
+
+
+```
+Notice how the animation moves jerkily, 'jumping' from one year to the next 12 times in total. This is a bit clunky, which is why it's good we have another option. 
+
+
+### Option 2 Animate using transition_time()
+This option smoothes the transition between different 'frames', because it interpolates and adds transitional years where there are gaps in the timeseries data.
+
+```{r anim2}
+anim2 <- ggplot(gapminder, aes(gdpPercap, lifeExp, size = pop, color = continent)) +
+  geom_point() +
+  scale_x_log10() + 
+  transition_time(year)
+
+anim2 # plot
+
+```
+
+The much smoother movement in Option 2 will be much more noticeable if you add a title to the chart, that will page through the years corresponding to each frame.
+
+
+## Q5 Can you add a title to one or both of the animations above that will change 
+ in sync with the animation? [hint: search labeling for transition_states() and transition_time() functions respectively]
+```{r}
+
+# I add '{frame_time} in labs.
+anim2  +
+  labs(title = 'Year: {frame_time}', x = 'GDP per capita (logarithmic transformed)', y = 'Life Expectancy')
+
+anim2 # plot 
+
+
+```
+
+
+## Q6 Can you make the axes' labels and units more readable? Consider expanding the abreviated lables as well as the scientific notation in the legend and x axis to whole numbers.[hint:search disabling scientific notation]
+```{r}
+
+gapminder$gdpLog <- log10(gapminder$gdpPercap)
+
+anim3 <- ggplot(gapminder, aes(gdpLog, lifeExp, size = pop, color = continent)) +
+  geom_point() +
+  transition_time(year) + 
+  labs(title = 'Relation between GDP and life time from 1952 to 2007: {frame_time}', x = 'GDP per capita (on a 10 base logarithmic scale)', y = 'Life Expectancy in years') +
+  scale_x_continuous(labels = comma_format(big.mark = ".",
+                                           decimal.mark = ","))
+
+anim3 # plot
+
+```
+
+
+## Q7 Come up with a question you want to answer using the gapminder data and write it down. Then, create a data visualisation that answers the question and explain how your visualization answers the question. 
+
+(Example: you wish to see what was mean life expectancy across the continents in the year you were born versus your parents' birth years). [hint: if you wish to have more data than is in the filtered gapminder, you can load either the `gapminder_unfiltered` dataset and download more at https://www.gapminder.org/data/ ]
+
+I wish to compare life expectancyies over time across continents in the world. That will enable me to see the development by continent but also compare the development across continent. I use a bar plot to clearly indicate the life expectancies and use facet_wrap to create a plot for each continent. This reduces confusion compared to plotting everyhting on top of each other.
+
+```{r}
+
+
+dataSub <- subset(gapminder) %>% group_by(continent, year) %>% dplyr::summarize(
+  lifeExpect = mean(lifeExp)
+  )
+
+PlotQ7 <- ggplot(dataSub, aes(year, lifeExpect, fill = continent)) +
+  geom_bar(stat = "identity", width = 2) + facet_wrap(~ continent) + 
+  labs(title = "Life expectancies by continent from 1952 to 2007", x = "Year", y = "Life Expectancies in Years")
+
+PlotQ7
+
+```
+
+
+
+
+
+
+
+
