@@ -1,0 +1,111 @@
+---
+title: "W6_functions"
+author: "Aske Svane Qvist"
+date: "25 October 2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Load packages and data
+```{r}
+library(pacman)
+p_load(tidyverse, gapminder)
+
+# gapminder as df
+d <- gapminder
+
+```
+
+
+# 1. Define a defensive function that calculates the Gross Domestic Product of a nation from the data available in the gapminder dataset. Using that function, calculate the GDP of Denmark in the following years: 1967, 1977, 1987, 1997, 2007, and 2017.
+
+```{r}
+# Create function
+calcGDP <- function(data, country = NULL, year = NULL){
+  
+  
+  if (!is.na(country)){
+    data <- data[data$country %in% country, ]
+    # if 'country' is not NA, subset all rows with that or those countries
+  }
+  
+  if (!is.na(year)){
+    data <- data[data$year %in% year, ]
+  }
+  
+  gdp <- data$gdpPercap * data$pop
+  
+  new = cbind(data, gdp)
+  
+  return(new)
+  
+}
+
+# Create empty df and make a list of years
+DK <- d[0,]
+years <- c(1967, 1977, 1987, 1997, 2007)
+
+# loop thorugh all years and gather in a single df
+for (i in 1:length(years)){
+
+  new <- calcGDP(d, "Denmark", years[i])
+  
+  if (length(DK) == 0){
+    DK <- new
+  } else{
+    DK <- rbind(DK, new)
+  }
+
+}
+
+# The results
+DK
+
+```
+
+
+# 2. Write a script that loops over each country in the gapminder dataset, tests whether the country starts with a ‘B’ , and print out whether the life expectancy is smaller than 50, between 50 and 70, or greater than 70.
+
+```{r}
+
+# one column df with countries on the list in 2007 (newest)
+countries <- d %>% filter(year == 2007)
+
+list <- as.list(countries[,1])
+list <- list[["country"]]
+length(list)
+
+# Loop through all countries (existing in 2007) and print information
+for (i in 1:length(list)){
+  
+  x <- list[i]
+  first <- substr(x, start = 1, stop = 1)
+  
+  if (isTRUE(first == "B") == TRUE){
+    sentence1 <- paste("The first letter of the country", x, "is B.")
+  } else {
+    sentence1 <- paste("The first letter of the country", x, "is not B.")
+  }
+
+  if (countries$lifeExp[i] <= 50){
+    sentence2 <- paste("In", x, "the life expectancy was under 50 years in 2007.")
+  
+  } else if (countries$lifeExp[i] >= 70){
+    sentence2 <- paste("In", x, "the life expectancy was greater than 70 years in 2007.")
+  
+  } else {
+    sentence2 <- paste("In", x, "the life expectancy was between 50 and 70 years in 2007.")
+  
+  }
+
+  print(paste(sentence1,sentence2))
+  
+}
+
+
+```
+
