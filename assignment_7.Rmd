@@ -1,0 +1,144 @@
+---
+title: "assignment_7"
+author: "Aske Svane Qvist"
+date: "2 November 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Packages
+```{r}
+library(pacman)
+p_load(tidyverse, rvest, dplyr, tidyr, stringr, janitor, lubridate, ggridges, statebins, viridis)
+
+
+
+
+```
+
+## Police killing scraping and tidying (primarily from Adela)
+```{r}
+# Scrape function
+scrape_police_kill <- function(website){
+	url <- read_html(website)
+	annual_table <- url %>% 
+ 			html_nodes("table") %>%
+ 			html_table()  # result is a list
+  annual_table <- do.call(cbind,unlist(annual_table, recursive = FALSE))
+ }
+
+# loop through years
+mastertable=NULL  # we need to create an empty container for results
+
+for (year in 2013:2020){  # here we create a loop to iterate over the years
+	print(year)
+	url <- "https://killedbypolice.net/kbp"   # the annual URLs end with "kbp2017" ,etc.
+	website <- paste0(url,year)  # here we bind the year to the website to form the URL
+	annual_table <- scrape_police_kill(website) # here we apply the function
+	mastertable <- rbind(mastertable, annual_table) # we add the scraped results from the given year to our master dataset
+	}
+
+# to tibble
+mastertable <- as_tibble(mastertable)
+
+# mutate columns
+data <- mastertable %>% 
+	mutate(Age = as.numeric(Age),
+				 Race = as.factor(Race),
+				 Gender = as.factor(Gender),
+				 State = as.factor(State)) %>% 
+	rename(Method = "*") 
+
+
+data <- data %>% 
+	mutate(Date =
+			case_when(
+				grepl("201[34]",Date) ~ mdy(Date),  
+				# convert dates that contain 2013 or 2014 into mdy format 
+				!grepl("201[34]",Date)~ ymd(Date)))
+				# convert all other dates ymd format
+
+data <- data %>% 
+	mutate(Year = year(Date)) 
+
+
+state_abb <- data_frame(state_name = state.name,
+                        state_abb = state.abb)
+
+# we need to add the state popluations so we can get a proportion of people in each state
+# we got this from https://www2.census.gov/programs-surveys/popest/tables/2010-2016/state/totals/nst-est2016-01.xlsx
+state_populations <- readr::read_csv("data-raw/nst-est2016-01.csv")
+
+# clean it a little
+state_populations <-  
+  state_populations %>% 
+  mutate(state_name = gsub("\\.", "", X__1)) %>%
+  left_join(state_abb)
+
+# compute deaths by state and as deaths per 1000 people in each state
+policeKill2016 <- data %>% 
+  filter(Year == 2016) %>% 
+  group_by(State) %>% 
+  tally() %>% 
+  left_join(state_abb, by = c('State' = 'state_abb')) %>% 
+  filter(!is.na(state_name)) %>% 
+  left_join(state_populations) %>% 
+  mutate(per_n_people = (n / `2016`) * 1000000) %>% 
+	select(3, 14, 15, 16)
+
+
+
+```
+
+## homicide scraping
+```{r}
+
+url <- "https://en.wikipedia.org/wiki/List_of_U.S._states_by_homicide_rate"
+
+# scrape the website
+url_html <- read_html(url)
+
+# extract the HTML table through the <table> tag >> this creates a list instead of dataframe, but we can unlist a list and coerce it into a dataframe, so vaersgo!
+whole_table <- url_html %>% 
+ html_nodes("table") %>%
+ html_table()  #str(whole_table) turns out to be a list
+
+homicide_rate_wiki <- do.call(cbind.data.frame,whole_table) 
+
+# switches around the columns
+homicide <- homicide_rate_wiki[,c(1,8,7,6,5,4,3,2)]
+homicide2017 <- homicide %>% select(1, 7)
+# columns contain rates per 100,000 inhabitants per year
+
+allData <- merge(policeKill2016, homicide2017, by.x = "state_name", by.y = "State")
+
+names(allData)[names(allData) == "2016"] <- "Pop2016"
+names(allData)[names(allData) == "per_n_people"] <- "PoliceKills"	
+names(allData)[names(allData) == "2017"] <- "homicide2017"	
+
+allData <- allData %>% mutate(
+	homicide2017 = homicide2017 * 10
+) %>% mutate(
+	homicide_Policekill = PoliceKills / homicide2017,
+	state_abb = as.factor(state_abb))
+
+
+
+ggplot(allData, 
+       aes(state = state_name, 
+           fill = homicide_Policekill)) +
+  geom_statebins() +
+  coord_equal() +
+  scale_fill_viridis() +
+  theme_statebins() +
+  labs(title = "Police Aggressiveness", subtitle = "The ratio between police killings \nand homicide") +
+  theme(legend.title=element_blank()) 
+
+
+```
+
+In Nebraska and Hawaii, there is a fairly high number of police killings relative to the number of homicides. When taking into consideration the number of people getting murdered, the police seems relatively more aggressive than in other states.
+
