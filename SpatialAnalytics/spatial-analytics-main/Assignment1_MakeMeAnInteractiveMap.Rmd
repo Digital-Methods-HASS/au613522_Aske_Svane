@@ -1,0 +1,112 @@
+---
+title: "W1 - Make me an interactive map"
+author: "Aske Svane Qvist"
+date: "5 February 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Import packages and data from csv.
+```{r}
+# packages
+library(pacman)
+p_load(leaflet, htmltools, htmlwidgets, tidyverse)
+
+# data points
+data <- read_csv("data/RCFeature.csv")
+
+```
+
+### Creating interactive map of Blue Mountains with the markers
+```{r}
+
+# assign the base location to the object based on the lng/lat provided in the data.
+l_BM <- leaflet() %>%   
+  setView(lng = mean(data$Longitude, na.rm = TRUE),
+          lat = mean(data$Latitude, na.rm = TRUE),
+          zoom = 10)
+
+
+# Add different ESRI provider tiles
+esri <- grep("^Esri", providers, value = TRUE)
+
+for (provider in esri) {
+  l_BM <- l_BM %>% addProviderTiles(provider, group = provider)
+}
+
+
+# Create content for the popups on the markers from the data.
+content <- paste("FeatureID:", data$FeatureID, "<br/>",
+                 "FeatureType:", data$FeatureType, "<br/>",
+                 "Decription:", data$Description)
+
+
+# Create the map
+BMmap <- l_BM %>%
+  addTiles() %>% 
+  
+  # Adding the circle markers based on lng/lat and add popup info.
+  addCircleMarkers(lng = data$Longitude, 
+                   lat = data$Latitude,
+                   # Add text
+                   popup = content,
+                   # Add cluster
+                   clusterOptions = TRUE,
+                   # Differentiate size of markers based on accuracy
+                   radius = data$Accuracy * 20) %>% 
+  
+  # Adding the different ESRI layers
+  addLayersControl(baseGroups = names(esri),
+                   options = layersControlOptions(collapsed = FALSE)) %>%
+  
+  # Adding minimap in the bottom right corner
+  addMiniMap(tiles = esri[[1]], toggleDisplay = TRUE,
+             position = "bottomright") %>%
+ 
+  # Adding measure option in the bottom left corner
+  addMeasure(
+    position = "bottomleft",
+    primaryLengthUnit = "meters",
+    primaryAreaUnit = "sqmeters",
+    activeColor = "#3D535D",
+    completedColor = "#7D4479") %>% 
+
+  htmlwidgets::onRender("
+                        function(el, x) {
+                        var myMap = this;
+                        myMap.on('baselayerchange',
+                        function (e) {
+                        myMap.minimap.changeLayer(L.tileLayer.provider(e.name));
+                        })
+                        }") %>% 
+  
+  addControl("", position = "topright")
+
+
+# Run the map
+BMmap
+
+```
+
+### Save the map
+```{r}
+
+saveWidget(BMmap, "BMmap.html", selfcontained = TRUE)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
