@@ -1,0 +1,1 @@
+All assignment scripts can be found in the 'src' folder.
